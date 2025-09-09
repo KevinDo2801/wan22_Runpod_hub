@@ -55,6 +55,7 @@ RUN wget -q https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan22-Light
 RUN wget -q https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan22-Lightning/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors -O /ComfyUI/models/loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
 
 COPY . .
+COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
 RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]
