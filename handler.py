@@ -9,6 +9,8 @@ import logging
 import urllib.request
 import urllib.parse
 import binascii # Base64 에러 처리를 위해 import
+import boto3
+from botocore.exceptions import ClientError
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,6 +47,54 @@ def save_data_if_base64(data_input, temp_dir, output_filename):
         # 디코딩에 실패하면, 일반 경로로 간주하고 원래 값을 그대로 반환합니다.
         print(f"➡️ '{data_input}'은(는) 파일 경로로 처리합니다.")
         return data_input
+
+def upload_video_to_r2(video_path):
+    """
+    Upload video file to Cloudflare R2 and return public URL
+    Returns: dict with video_url, bucket, key on success; None on failure
+    """
+    try:
+        # Load R2 credentials from env
+        account_id = os.getenv('R2_ACCOUNT_ID')
+        access_key = os.getenv('R2_ACCESS_KEY_ID')
+        secret_key = os.getenv('R2_SECRET_ACCESS_KEY')
+        bucket_name = os.getenv('R2_BUCKET_NAME')
+        public_base_url = os.getenv('R2_PUBLIC_BASE_URL', os.getenv('R2_PUBLIC_URL'))
+        
+        # Validate credentials
+        if not all([account_id, access_key, secret_key, bucket_name, public_base_url]):
+            logger.warning("R2 credentials missing, skipping upload")
+            return None
+        
+        # Create S3 client for R2
+        s3 = boto3.client(
+            's3',
+            endpoint_url=f'https://{account_id}.r2.cloudflarestorage.com',
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name='auto'
+        )
+        
+        # Generate unique filename
+        filename = f"wan22_{uuid.uuid4()}.mp4"
+        key = f"lazyclips-assets/videos/wan22/{filename}"
+        
+        # Upload file
+        with open(video_path, 'rb') as f:
+            s3.upload_fileobj(f, bucket_name, key)
+        
+        # Construct public URL
+        video_url = f"{public_base_url}/{key}"
+        
+        logger.info(f"Video uploaded to R2: {video_url}")
+        return {
+            "video_url": video_url,
+            "bucket": bucket_name,
+            "key": key
+        }
+    except Exception as e:
+        logger.error(f"Failed to upload to R2: {e}")
+        return None
     
 def queue_prompt(prompt):
     url = f"http://{server_address}:8188/prompt"
@@ -88,10 +138,20 @@ def get_videos(ws, prompt):
         videos_output = []
         if 'gifs' in node_output:
             for video in node_output['gifs']:
-                # fullpath를 이용하여 직접 파일을 읽고 base64로 인코딩
-                with open(video['fullpath'], 'rb') as f:
-                    video_data = base64.b64encode(f.read()).decode('utf-8')
-                videos_output.append(video_data)
+                video_path = video['fullpath']
+                
+                # Try to upload to R2
+                r2_result = upload_video_to_r2(video_path)
+                
+                if r2_result:
+                    # Success: return R2 metadata
+                    videos_output.append(r2_result)
+                else:
+                    # Fallback: return base64
+                    logger.warning("R2 upload failed, falling back to base64")
+                    with open(video_path, 'rb') as f:
+                        video_data = base64.b64encode(f.read()).decode('utf-8')
+                    videos_output.append({"video": video_data})
         output_videos[node_id] = videos_output
 
     return output_videos
@@ -236,10 +296,16 @@ def handler(job):
     videos = get_videos(ws, prompt)
     ws.close()
 
-    # 이미지가 없는 경우 처리
+    # Return video result (R2 URL or base64 fallback)
     for node_id in videos:
         if videos[node_id]:
-            return {"video": videos[node_id][0]}
+            result = videos[node_id][0]
+            
+            # Check if R2 upload success or fallback
+            if "video_url" in result:
+                return result  # Return R2 metadata
+            else:
+                return result  # Return base64 fallback
     
     return {"error": "비디오를를 찾을 수 없습니다."}
 
