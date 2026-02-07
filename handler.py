@@ -166,7 +166,9 @@ def handler(job):
     logger.info(f"Received job input: {job_input}")
     task_id = f"task_{uuid.uuid4()}"
 
-    image_input = job_input["image_path"]
+    image_input = job_input.get("image_path")
+    if not image_input:
+        return {"error": "input must include 'image_path' (file path or base64 string)"}
     # 헬퍼 함수를 사용해 이미지 파일 경로 확보 (Base64 또는 Path)
     # 이미지 확장자를 알 수 없으므로 .jpg로 가정하거나, 입력에서 받아야 합니다.
     if image_input == "/example_image.png":
@@ -202,13 +204,20 @@ def handler(job):
     length = job_input.get("length", 81)
     steps = job_input.get("steps", 10)
 
+    # Optional params with defaults (workflow defaults: cfg=4, width/height from input or 1024)
+    cfg = job_input.get("cfg", 4)
+    width = job_input.get("width", 1024)
+    height = job_input.get("height", 1024)
+    seed = job_input.get("seed", 0)
+    prompt_text = job_input.get("prompt", "")
+
     prompt["260"]["inputs"]["image"] = image_path
     prompt["846"]["inputs"]["value"] = length
-    prompt["246"]["inputs"]["value"] = job_input["prompt"]
-    prompt["835"]["inputs"]["noise_seed"] = job_input["seed"]
-    prompt["830"]["inputs"]["cfg"] = job_input["cfg"]
-    prompt["849"]["inputs"]["value"] = job_input["width"]
-    prompt["848"]["inputs"]["value"] = job_input["height"]
+    prompt["246"]["inputs"]["value"] = prompt_text
+    prompt["835"]["inputs"]["noise_seed"] = seed
+    prompt["830"]["inputs"]["cfg"] = cfg
+    prompt["849"]["inputs"]["value"] = width
+    prompt["848"]["inputs"]["value"] = height
     
     # step 설정 적용
     if "834" in prompt:
