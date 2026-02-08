@@ -10,6 +10,7 @@ import urllib.request
 import urllib.parse
 import binascii # Base64 에러 처리를 위해 import
 import boto3
+import shutil
 from botocore.exceptions import ClientError
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -191,12 +192,31 @@ def handler(job):
     
     # URL, Base64 또는 Path 여부에 따라 이미지 처리
     if image_input.startswith(("http://", "https://")):
-        image_path = download_image(image_input, task_id, "input_image.jpg")
+        temp_image_path = download_image(image_input, task_id, "input_image.jpg")
     elif image_input == "/example_image.png":
-        image_path = "/example_image.png"
+        temp_image_path = "/example_image.png"
     else:
-        image_path = save_data_if_base64(image_input, task_id, "input_image.jpg")
+        temp_image_path = save_data_if_base64(image_input, task_id, "input_image.jpg")
+
+    # ComfyUI input 디렉토리로 이미지 복사
+    comfyui_input_dir = os.path.join(os.getcwd(), "ComfyUI", "input")
+    if not os.path.exists(comfyui_input_dir):
+        # Docker 환경에 theo đường dẫn thông thường
+        comfyui_input_dir = "/ComfyUI/input"
     
+    os.makedirs(comfyui_input_dir, exist_ok=True)
+    
+    image_filename = f"{uuid.uuid4()}.jpg"
+    image_path = os.path.join(comfyui_input_dir, image_filename)
+    
+    try:
+        shutil.copy(temp_image_path, image_path)
+        logger.info(f"✅ 이미지를 ComfyUI input 폴더로 복사했습니다: {image_path}")
+    except Exception as e:
+        logger.error(f"❌ 이미지 복사 실패: {e}")
+        # 복사 실패 시 원본 경로 사용 시도
+        image_filename = temp_image_path
+
     # LoRA 설정 확인 - 배열로 받아서 처리
     lora_pairs = job_input.get("lora_pairs", [])
     
@@ -232,7 +252,7 @@ def handler(job):
     seed = job_input.get("seed", 0)
     prompt_text = job_input.get("prompt", "")
 
-    prompt["260"]["inputs"]["image"] = image_path
+    prompt["260"]["inputs"]["image"] = image_filename
     prompt["846"]["inputs"]["value"] = length
     prompt["246"]["inputs"]["value"] = prompt_text
     prompt["835"]["inputs"]["noise_seed"] = seed
