@@ -1,5 +1,3 @@
-import runpod
-from runpod.serverless.utils import rp_upload
 import os
 import websocket
 import base64
@@ -8,10 +6,27 @@ import uuid
 import logging
 import urllib.request
 import urllib.parse
-import binascii # Base64 에러 처리를 위해 import
+import binascii
 import boto3
 import shutil
+import time
+import runpod
 from botocore.exceptions import ClientError
+
+# --- Network Volume Configuration ---
+VOLUME_PATH = "/runpod-volume"
+if os.path.exists(VOLUME_PATH):
+    # Chuyển hướng cache của HuggingFace và các thư viện khác vào Volume
+    os.environ["HF_HOME"] = os.path.join(VOLUME_PATH, "huggingface")
+    os.environ["XDG_CACHE_HOME"] = os.path.join(VOLUME_PATH, "xdg_cache")
+    # Tạo các thư mục cần thiết
+    os.makedirs(os.environ["HF_HOME"], exist_ok=True)
+    os.makedirs(os.environ["XDG_CACHE_HOME"], exist_ok=True)
+    print(f"✅ Network Volume detected at {VOLUME_PATH}. Caching redirected.")
+else:
+    print("ℹ️ No Network Volume detected. Using local container storage.")
+# -------------------------------------
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -153,26 +168,44 @@ def get_videos(ws, prompt):
             continue
 
     history = get_history(prompt_id)[prompt_id]
+    logger.info(f"Job history: {json.dumps(history, indent=2)}")
+
     for node_id in history['outputs']:
         node_output = history['outputs'][node_id]
         videos_output = []
-        if 'gifs' in node_output:
-            for video in node_output['gifs']:
-                video_path = video['fullpath']
-                
-                # Try to upload to R2
-                r2_result = upload_video_to_r2(video_path)
-                
-                if r2_result:
-                    # Success: return R2 metadata
-                    videos_output.append(r2_result)
-                else:
-                    # Fallback: return base64
-                    logger.warning("R2 upload failed, falling back to base64")
-                    with open(video_path, 'rb') as f:
-                        video_data = base64.b64encode(f.read()).decode('utf-8')
-                    videos_output.append({"video": video_data})
-        output_videos[node_id] = videos_output
+        
+        # VHS_VideoCombine hoặc các node output video khác
+        output_keys = ['gifs', 'videos', 'images']
+        found_output = False
+        
+        for key in output_keys:
+            if key in node_output:
+                for video in node_output[key]:
+                    if 'fullpath' in video:
+                        video_path = video['fullpath']
+                        found_output = True
+                        
+                        # Try to upload to R2
+                        r2_result = upload_video_to_r2(video_path)
+                        
+                        if r2_result:
+                            videos_output.append(r2_result)
+                        else:
+                            logger.warning("R2 upload failed, falling back to base64")
+                            with open(video_path, 'rb') as f:
+                                video_data = base64.b64encode(f.read()).decode('utf-8')
+                            videos_output.append({"video": video_data})
+        
+        if found_output:
+            output_videos[node_id] = videos_output
+
+    if not output_videos:
+        # Nếu không có output, kiểm tra xem có lỗi node không
+        if 'status' in history and 'messages' in history['status']:
+            for msg in history['status']['messages']:
+                if msg[0] == 'execution_error':
+                    logger.error(f"Node execution error: {msg[1]}")
+                    return {"error": f"Node error: {msg[1]}"}
 
     return output_videos
 
@@ -198,10 +231,21 @@ def handler(job):
     else:
         temp_image_path = save_data_if_base64(image_input, task_id, "input_image.jpg")
 
-    # ComfyUI input 디렉토리로 이미지 복사
-    comfyui_input_dir = os.path.join(os.getcwd(), "ComfyUI", "input")
-    if not os.path.exists(comfyui_input_dir):
-        # Docker 환경에 theo đường dẫn thông thường
+    # ComfyUI input 디렉토리 확인
+    possible_input_dirs = [
+        "/ComfyUI/input",
+        os.path.join(os.getcwd(), "ComfyUI", "input"),
+        os.path.join(os.path.dirname(os.getcwd()), "ComfyUI", "input"),
+        "./input"
+    ]
+    
+    comfyui_input_dir = None
+    for d in possible_input_dirs:
+        if os.path.exists(d):
+            comfyui_input_dir = d
+            break
+            
+    if not comfyui_input_dir:
         comfyui_input_dir = "/ComfyUI/input"
     
     os.makedirs(comfyui_input_dir, exist_ok=True)

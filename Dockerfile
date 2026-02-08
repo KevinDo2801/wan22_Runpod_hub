@@ -49,8 +49,12 @@ COPY --from=model_provider /models/text_encoders /ComfyUI/models/text_encoders
 COPY --from=model_provider /models/diffusion_models /ComfyUI/models/diffusion_models
 COPY --from=model_provider /models/loras /ComfyUI/models/loras
 
-COPY . .
+# Chỉ copy những file cấu hình ít thay đổi trước
 COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Cuối cùng mới copy toàn bộ code (bao gồm handler.py)
+COPY . .
 
 CMD ["/entrypoint.sh"]
