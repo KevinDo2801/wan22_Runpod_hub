@@ -9,7 +9,7 @@
           "width": 1024,
           "height": 1024
         },
-      "timeout": 10000
+      "timeout": 600000
     }
   ],
   "config": {
