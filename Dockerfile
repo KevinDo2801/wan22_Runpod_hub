@@ -52,9 +52,8 @@ RUN cd /ComfyUI/custom_nodes && \
 # Chỉ copy những file cấu hình ít thay đổi trước
 COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 # Cuối cùng mới copy toàn bộ code (bao gồm handler.py)
 COPY . .
+RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]
