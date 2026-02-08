@@ -165,7 +165,7 @@
   "288": {
     "inputs": {
       "model": [
-        "594",
+        "393",
         0
       ]
     },
@@ -177,7 +177,7 @@
   "290": {
     "inputs": {
       "model": [
-        "593",
+        "392",
         0
       ]
     },
@@ -255,47 +255,11 @@
       "title": "Dummy Out"
     }
   },
-  "390": {
-    "inputs": {
-      "backend": "inductor",
-      "fullgraph": false,
-      "mode": "default",
-      "dynamic": false,
-      "compile_transformer_blocks_only": true,
-      "dynamo_cache_size_limit": 64,
-      "model": [
-        "285",
-        0
-      ]
-    },
-    "class_type": "TorchCompileModelWanVideoV2",
-    "_meta": {
-      "title": "TorchCompileModelWanVideoV2"
-    }
-  },
-  "391": {
-    "inputs": {
-      "backend": "inductor",
-      "fullgraph": false,
-      "mode": "default",
-      "dynamic": false,
-      "compile_transformer_blocks_only": true,
-      "dynamo_cache_size_limit": 64,
-      "model": [
-        "283",
-        0
-      ]
-    },
-    "class_type": "TorchCompileModelWanVideoV2",
-    "_meta": {
-      "title": "TorchCompileModelWanVideoV2"
-    }
-  },
   "392": {
     "inputs": {
       "sage_attention": "sageattn_qk_int8_pv_fp8_cuda++",
       "model": [
-        "391",
+        "283",
         0
       ]
     },
@@ -308,7 +272,7 @@
     "inputs": {
       "sage_attention": "sageattn_qk_int8_pv_fp8_cuda++",
       "model": [
-        "390",
+        "285",
         0
       ]
     },
@@ -352,38 +316,6 @@
     "class_type": "WanFirstLastFrameToVideo",
     "_meta": {
       "title": "WAN 비디오 생성 (시작-끝 프레임)"
-    }
-  },
-  "593": {
-    "inputs": {
-      "reuse_threshold": 0.2,
-      "start_percent": 0.15,
-      "end_percent": 0.95,
-      "verbose": false,
-      "model": [
-        "392",
-        0
-      ]
-    },
-    "class_type": "EasyCache",
-    "_meta": {
-      "title": "EasyCache"
-    }
-  },
-  "594": {
-    "inputs": {
-      "reuse_threshold": 0.2,
-      "start_percent": 0.15,
-      "end_percent": 0.95,
-      "verbose": false,
-      "model": [
-        "393",
-        0
-      ]
-    },
-    "class_type": "EasyCache",
-    "_meta": {
-      "title": "EasyCache"
     }
   },
   "828": {

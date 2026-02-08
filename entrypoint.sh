@@ -3,7 +3,7 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# Start ComfyUI in the background
+# Start ComfyUI in the background (Torch Compile / EasyCache removed from workflows for faster cold start)
 echo "Starting ComfyUI in the background..."
 python /ComfyUI/main.py --listen --use-sage-attention &
 

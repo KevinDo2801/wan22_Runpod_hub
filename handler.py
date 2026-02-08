@@ -18,6 +18,25 @@ logger = logging.getLogger(__name__)
 
 server_address = os.getenv('SERVER_ADDRESS', '127.0.0.1')
 client_id = str(uuid.uuid4())
+def download_image(url, temp_dir, output_filename):
+    """
+    URL에서 이미지를 다운로드하여 지정된 경로에 저장합니다.
+    """
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+        file_path = os.path.abspath(os.path.join(temp_dir, output_filename))
+        
+        # User-Agent를 설정하여 403 Forbidden 에러 방지
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response, open(file_path, 'wb') as out_file:
+            out_file.write(response.read())
+            
+        print(f"✅ URL에서 이미지를 다운로드하여 '{file_path}'에 저장했습니다.")
+        return file_path
+    except Exception as e:
+        print(f"❌ URL 이미지 다운로드 실패: {e}")
+        return url
+
 def save_data_if_base64(data_input, temp_dir, output_filename):
     """
     입력 데이터가 Base64 문자열인지 확인하고, 맞다면 파일로 저장 후 경로를 반환합니다.
@@ -169,9 +188,11 @@ def handler(job):
     image_input = job_input.get("image_path")
     if not image_input:
         return {"error": "input must include 'image_path' (file path or base64 string)"}
-    # 헬퍼 함수를 사용해 이미지 파일 경로 확보 (Base64 또는 Path)
-    # 이미지 확장자를 알 수 없으므로 .jpg로 가정하거나, 입력에서 받아야 합니다.
-    if image_input == "/example_image.png":
+    
+    # URL, Base64 또는 Path 여부에 따라 이미지 처리
+    if image_input.startswith(("http://", "https://")):
+        image_path = download_image(image_input, task_id, "input_image.jpg")
+    elif image_input == "/example_image.png":
         image_path = "/example_image.png"
     else:
         image_path = save_data_if_base64(image_input, task_id, "input_image.jpg")
