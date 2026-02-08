@@ -53,6 +53,46 @@ def download_image(url, temp_dir, output_filename):
         print(f"❌ URL 이미지 다운로드 실패: {e}")
         return url
 
+def download_lora_if_url(lora_input):
+    """
+    LoRA 입력이 URL인 경우 download하여 /runpod-volume/loras/ (또는 local)에 저장하고 파일명을 반환합니다.
+    이미 파일명인 경우 그대로 반환합니다.
+    """
+    if not lora_input or not isinstance(lora_input, str):
+        return lora_input
+    
+    if lora_input.startswith(("http://", "https://")):
+        try:
+            # LoRA 저장 경로 설정
+            lora_dir = "/runpod-volume/loras" if os.path.exists("/runpod-volume") else "/ComfyUI/models/loras"
+            os.makedirs(lora_dir, exist_ok=True)
+            
+            # URL에서 파일명 추출 hoặc tạo tên ngẫu nhiên
+            parsed_url = urllib.parse.urlparse(lora_input)
+            filename = os.path.basename(parsed_url.path)
+            if not filename or "." not in filename:
+                filename = f"downloaded_{uuid.uuid4().hex[:8]}.safetensors"
+            
+            file_path = os.path.join(lora_dir, filename)
+            
+            # Nếu file đã tồn tại, không tải lại
+            if os.path.exists(file_path):
+                logger.info(f"➡️ LoRA already exists: {filename}")
+                return filename
+            
+            logger.info(f"⏳ Downloading LoRA from URL: {lora_input}")
+            req = urllib.request.Request(lora_input, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=300) as response, open(file_path, 'wb') as out_file:
+                out_file.write(response.read())
+            
+            logger.info(f"✅ LoRA downloaded and saved to: {file_path}")
+            return filename
+        except Exception as e:
+            logger.error(f"❌ Failed to download LoRA: {e}")
+            return lora_input
+    
+    return lora_input
+
 def save_data_if_base64(data_input, temp_dir, output_filename):
     """
     입력 데이터가 Base64 문자열인지 확인하고, 맞다면 파일로 저장 후 경로를 반환합니다.
@@ -336,21 +376,25 @@ def handler(job):
                 lora_high_weight = lora_pair.get("high_weight", 1.0)
                 lora_low_weight = lora_pair.get("low_weight", 1.0)
                 
+                # Tự động tải LoRA nếu là URL
+                lora_high_name = download_lora_if_url(lora_high)
+                lora_low_name = download_lora_if_url(lora_low)
+                
                 # HIGH LoRA 설정
                 if i < len(current_mapping["high"]):
                     high_node_id = current_mapping["high"][i]
-                    if high_node_id in prompt and lora_high:
-                        prompt[high_node_id]["inputs"]["lora_name"] = lora_high
+                    if high_node_id in prompt and lora_high_name:
+                        prompt[high_node_id]["inputs"]["lora_name"] = lora_high_name
                         prompt[high_node_id]["inputs"]["strength_model"] = lora_high_weight
-                        logger.info(f"LoRA {i+1} HIGH applied: {lora_high} with weight {lora_high_weight}")
+                        logger.info(f"LoRA {i+1} HIGH applied: {lora_high_name} with weight {lora_high_weight}")
                 
                 # LOW LoRA 설정
                 if i < len(current_mapping["low"]):
                     low_node_id = current_mapping["low"][i]
-                    if low_node_id in prompt and lora_low:
-                        prompt[low_node_id]["inputs"]["lora_name"] = lora_low
+                    if low_node_id in prompt and lora_low_name:
+                        prompt[low_node_id]["inputs"]["lora_name"] = lora_low_name
                         prompt[low_node_id]["inputs"]["strength_model"] = lora_low_weight
-                        logger.info(f"LoRA {i+1} LOW applied: {lora_low} with weight {lora_low_weight}")
+                        logger.info(f"LoRA {i+1} LOW applied: {lora_low_name} with weight {lora_low_weight}")
 
     ws_url = f"ws://{server_address}:8188/ws?clientId={client_id}"
     logger.info(f"Connecting to WebSocket: {ws_url}")
